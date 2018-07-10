@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="svc-welcome" basedir="." default="build">
+
+    <property file="build.properties"/>
+    <!--
+    Ensure that you have created/updated the transact-auth.properties file with the following properties
+      manager.url=your_dev_environment e.g. https://tm.test1.avoka.com/manager
+      manager.username=your_login
+      manager.password=your_password
+      manager.clientCode=target_org_code (found under Organisations in the Forms menu of TM)
+    -->
+    <property file="transact-auth.properties"/>
+
+    <path id="transact.fluent.api">
+        <fileset dir="${transact.api.dir}/lib"> <include name="**/*.jar"/> </fileset>
+    </path>
+
+    <taskdef resource="org/codehaus/groovy/antlib.xml"> <classpath refid="transact.fluent.api"/> </taskdef>
+    <taskdef resource="com/avoka/transact/ant/antlib.xml"> <classpath refid="transact.fluent.api"/> </taskdef>
+
+    <!--
+      service.code This property is used in the source directory, the archive file name, build file project name etc...
+    -->
+    <property name="service.code" value="welcome"/>
+
+    <!--
+      service.version This property is read from the service-def.json file
+    -->
+    <groovy>
+        String filePath = ant.project.getProperty("src.dir") + "/" + ant.project.getProperty("service.code") + "/service-def.json"
+        ant.loadfile(property: "svc-def", srcFile: filePath)
+        def svcDef = new groovy.json.JsonSlurper().parseText(ant.project.getProperty("svc-def"))
+        ant.property(name: "service.version", value: "" + svcDef.version)
+    </groovy>
+
+    <target name="build" depends="deploy, test-remote"/>
+
+    <target name="deploy" depends="package, upload"/>
+
+    <target name="type-check">
+        <gtypecheck src="${src.dir}/${service.code}/service-def.json" />
+    </target>
+
+    <target name="help-doc" depends="validate-service-def">
+        <!-- First arg is the source directory for the service, second is optional specifying the velocity template -->
+        <java classname="com.avoka.transact.doc.ServiceDoc" classpathref="transact.fluent.api">
+            <arg value="${src.dir}/${service.code}"/>
+            <arg value="/com/avoka/transact/doc/service-help.html"/>
+        </java>
+    </target>
+
+    <target name="package" depends="help-doc, type-check">
+        <gpackage src="${src.dir}/${service.code}/service-def.json"
+            file="${package.dir}/services/svc-${service.code}-v${service.version}.zip"
+            debug="false"/>
+    </target>
+
+    <target name="upload">
+        <gupload file="${package.dir}/services/svc-${service.code}-v${service.version}.zip"
+            clientCode="${manager.clientCode}"
+            url="${manager.url}"
+            username="${manager.username}"
+            password="${manager.password}" />
+    </target>
+
+    <target name="undeploy">
+        <gunload src="${src.dir}/${service.code}/service-def.json"
+            clientCode="${manager.clientCode}"
+            url="${manager.url}"
+            username="${manager.username}"
+            password="${manager.password}" />
+    </target>
+
+    <target name="test-remote">
+        <gtestremote src="${src.dir}/${service.code}/service-def.json"
+            clientCode="${manager.clientCode}"
+            url="${manager.url}"
+            username="${manager.username}"
+            password="${manager.password}"
+            junitXmlReport="out/test-${service.code}.xml" />
+    </target>
+
+    <target name="validate-service-def">
+        <groovy>
+            String filePath = ant.project.getProperty("src.dir") + "/" + ant.project.getProperty("service.code") + "/service-def.json"
+            ant.loadfile(property: "svc-def", srcFile: filePath)
+            String fileContent = ant.project.getProperty("svc-def")
+            def svcDef = new groovy.json.JsonSlurper().parseText(fileContent)
+            if(!svcDef.tmMinVersion){
+                fileContent = fileContent.replace( "\"parameters\"", "\"tmMinVersion\": \"" + ant.project.getProperty("manager.version.min") + "\",\n  \"parameters\"")
+            }
+            ant.project.setProperty("service.version", "" + svcDef.version)
+            svcDef.parameters.findAll { it.name in ["groovyScript","Unit Test Script", "Help Doc"] }.each {
+                if(it.readOnly == null) {
+                    fileContent = fileContent.replace("\"" + it.name + "\",", "\"" + it.name + "\",\n      \"readOnly\": true,")
+                } else if(it.readOnly == false){
+                    int indexStart = fileContent.indexOf("\"" + it.name + "\",")
+                    fileContent = fileContent.substring(0,indexStart) + fileContent.substring(indexStart).replaceFirst("\"readOnly\"[ \t]*:[ \t]* false","\"readOnly\": true")
+                }
+            }
+            ant.echo(file: filePath, append: false, message: fileContent)
+        </groovy>
+    </target>
+
+</project>
+        

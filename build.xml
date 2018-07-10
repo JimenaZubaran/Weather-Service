@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="project" basedir="." default="build-all-services">
+
+    <property file="build.properties"/>
+
+    <path id="transact.fluent.api">
+        <fileset dir="${transact.api.dir}/lib"> <include name="**/*.jar"/> </fileset>
+    </path>
+
+    <taskdef resource="org/codehaus/groovy/antlib.xml"> <classpath refid="transact.fluent.api"/> </taskdef>
+    <taskdef resource="com/avoka/transact/ant/antlib.xml"> <classpath refid="transact.fluent.api"/> </taskdef>
+    <taskdef resource="com/avoka/transact/ant/maestro/antlib.xml"> <classpath refid="transact.fluent.api"/> </taskdef>
+    <taskdef resource="net/sf/antcontrib/antlib.xml"> <classpath refid="transact.fluent.api"/> </taskdef>
+
+
+    <!--
+    Service generation properties are read from new-service.properties file:
+      * service.name the name of the service
+      * service.code short code used for the source directory, the archive file name, build file project name etc...
+      * service.template the Groovy Service Template to use
+      * service.version the version for this service (default 1)
+     -->
+    <property file="new-service.properties"/>
+
+    <target name="create-new-service">
+        <!-- Create the service build file using scaffold -->
+        <groovy>
+            org.apache.tools.ant.Project scProject = new org.apache.tools.ant.Project()
+            scProject.init()
+            org.apache.tools.ant.ProjectHelper.configureProject(scProject, new File("scaffold.xml"))
+            scProject.setProperty("service.code", ant.project.getProperty("service.code"))
+            scProject.executeTarget("scaffold-svc-build-xml")
+        </groovy>
+        <!-- Uses the Transact GAnt tasks to generate the service definition and associated files -->
+        <echo message="Generating Service: ${service.name} v${service.version}"/>
+        <gscaffold name="${service.name}"
+                   template="${service.template}"
+                   version="${service.version}"
+                   dir="src/${service.code}" />
+    </target>
+
+    <!--
+    Application Package generation properties are read from new-application-package.properties file:
+      * application.package.code the code of the applicaiton package
+      * application.package.name the name of the applicaiton package
+      -->
+    <property file="new-application-package.properties"/>
+    <property file="transact-auth.properties"/>
+
+    <target name="create-new-application-package">
+        <!-- Create the application package build file using scaffold -->
+        <groovy>
+            org.apache.tools.ant.Project scProject = new org.apache.tools.ant.Project()
+            scProject.init()
+            org.apache.tools.ant.ProjectHelper.configureProject(scProject, new File("scaffold.xml"))
+            scProject.setProperty("application.package.code", ant.project.getProperty("application.package.code"))
+            scProject.setProperty("application.package.name", ant.project.getProperty("application.package.name"))
+            scProject.executeTarget("scaffold-app-build-xml")
+        </groovy>
+        <echo message="Generating Application Pacakge: ${application.package.name}"/>
+        <apscaffold applicationPackageName="${application.package.name}"
+                    clientCode="${manager.clientCode}"
+                    dir="${basedir}/src/applications/${application.package.code}/" />
+    </target>
+
+    <target name="create-distribution-pack" depends="package-all">
+
+        <!-- Generate the readme.html package documentation -->
+        <antcall target="generate-package-docs" />
+
+        <!-- Increment the build number -->
+        <buildnumber file="build.number"/>
+
+        <!-- Pad the build number with leading zeros to length 3 -->
+        <groovy>
+            String buildNum = ant.project.getProperty("build.number")
+            String padding = "000"
+            String paddedNum = (buildNum.length() > padding.length() ? buildNum : padding.substring(buildNum.length()) + buildNum)
+            println("Build Number: " + paddedNum)
+            ant.project.setProperty("build.number", paddedNum)
+        </groovy>
+
+        <!-- Set the distribution package file name -->
+        <property name="dist.file.name">tpac-${project.code}-v${project.version.major}-${project.version.minor}-${build.number}.zip</property>
+
+        <!-- Create the distribution package (zip) file -->
+        <zip basedir="${package.dir}" filesonly="true"
+             destfile="${dist.dir}/${dist.file.name}"
+             includes="*.*,*/*"
+             excludes="*/*.md">
+        </zip>
+    </target>
+
+    <!-- This target generates the package readme.html file in the package dir -->
+    <target name="generate-package-docs">
+        <delete file="${package.dir}/build.info" failonerror="false"/>
+        <property name="properties.file.path" value="build.properties"/>
+        <java classname="com.avoka.transact.doc.PackageDoc" classpathref="transact.fluent.api" fork="true">
+            <arg value="${properties.file.path}"/>
+        </java>
+    </target>
+
+    <!-- This target runs the build target on all service build files -->
+    <target name="build-all-services">
+        <!-- Clean the services directory -->
+        <delete>
+            <fileset dir="${package.dir}/services" includes="*.zip"/>
+        </delete>
+        <groovy>
+            def scanner = ant.fileScanner {
+                fileset(dir:".") {
+                    include(name:"build-svc-*.xml")
+                }
+            }
+            for(f in scanner){
+                org.apache.tools.ant.Project svcProject = new org.apache.tools.ant.Project()
+                svcProject.init()
+                org.apache.tools.ant.ProjectHelper.configureProject(svcProject, f)
+                svcProject.executeTarget("build")
+            }
+        </groovy>
+    </target>
+
+    <!-- This target runs the build target on all service build files -->
+    <target name="deploy-all-services">
+        <!-- Clean the services directory -->
+        <delete failonerror="false">
+            <fileset dir="${package.dir}/services" includes="*.zip"/>
+        </delete>
+        <groovy>
+            def scanner = ant.fileScanner {
+                fileset(dir:".") {
+                    include(name:"build-svc-*.xml")
+                }
+            }
+            for(f in scanner){
+                org.apache.tools.ant.Project svcProject = new org.apache.tools.ant.Project()
+                svcProject.init()
+                org.apache.tools.ant.ProjectHelper.configureProject(svcProject, f)
+                svcProject.executeTarget("deploy")
+            }
+        </groovy>
+    </target>
+
+    <!-- packages all services, libs and projects -->
+    <target name="package-all" depends="package-all-services,package-all-maestro-libs,package-all-maestro-projects" />
+
+    <!-- This target runs the package target on all service build files -->
+    <target name="package-all-services">
+        <!-- Clean the services directory -->
+        <delete failonerror="false">
+            <fileset dir="${package.dir}/services" includes="*.zip"/>
+        </delete>
+        <groovy>
+            def scanner = ant.fileScanner {
+                fileset(dir:".") {
+                    include(name:"build-svc-*.xml")
+                }
+            }
+            for(f in scanner){
+                org.apache.tools.ant.Project svcProject = new org.apache.tools.ant.Project()
+                svcProject.init()
+                org.apache.tools.ant.ProjectHelper.configureProject(svcProject, f)
+                svcProject.executeTarget("package")
+            }
+        </groovy>
+    </target>
+
+    <!-- This target runs the package-lib target on all maestro library build files -->
+    <target name="package-all-maestro-libs">
+        <!-- Clean the maestro lib directory -->
+        <delete failonerror="false">
+            <fileset dir="${package.dir}/libraries" includes="*.zip"/>
+        </delete>
+        <groovy>
+            def scanner = ant.fileScanner {
+                fileset(dir:".") {
+                    include(name:"build-lib-*.xml")
+                }
+            }
+            for(f in scanner){
+                org.apache.tools.ant.Project maestroLibProject = new org.apache.tools.ant.Project()
+                maestroLibProject.init()
+                org.apache.tools.ant.ProjectHelper.configureProject(maestroLibProject, f)
+                maestroLibProject.executeTarget("package-lib")
+            }
+        </groovy>
+    </target>
+
+    <!-- This target runs the package-project target on all maestro projects build files -->
+    <target name="package-all-maestro-projects">
+        <!-- Clean the maestro projects directory -->
+        <delete>
+            <fileset dir="${package.dir}/projects" includes="*.zip"/>
+        </delete>
+        <groovy>
+            def scanner = ant.fileScanner {
+                fileset(dir:".") {
+                    include(name:"build-project-*.xml")
+                }
+            }
+            for(f in scanner){
+                org.apache.tools.ant.Project maestroProject = new org.apache.tools.ant.Project()
+                maestroProject.init()
+                org.apache.tools.ant.ProjectHelper.configureProject(maestroProject, f)
+                maestroProject.executeTarget("package-project")
+            }
+        </groovy>
+    </target>
+
+        <!--
+Maestro library generation properties are read from new-maestro-lib.properties file
+ -->
+    <property file="new-maestro-lib.properties"/>
+
+    <target name="create-maestro-lib">
+        <!-- Create the maestro library build file and template directory using scaffold -->
+        <groovy>
+            org.apache.tools.ant.Project maestroProject = new org.apache.tools.ant.Project()
+            maestroProject.init()
+            org.apache.tools.ant.ProjectHelper.configureProject(maestroProject, new File("scaffold.xml"))
+            String libName = ant.project.getProperty("maestro.library.name")
+            String libraryProjectName = ant.project.getProperty("maestro.library.project.name")
+            maestroProject.setProperty("maestro.library.name", libName)
+            maestroProject.setProperty("maestro.library.description", ant.project.getProperty("maestro.library.description"))
+            maestroProject.setProperty("maestro.library.project.name", libraryProjectName)
+            maestroProject.setProperty("distribute.library", ant.project.getProperty("distribute.library"))
+            // if project name is defined, then it's a project library
+            String libraryType = libraryProjectName ? 'Project' : 'Organization'
+            maestroProject.setProperty("maestro.library.type", libraryType)
+            // use maestro library name to generate a short library code. ('provider.product' -> 'provider-product')
+            String maestroLibCode = libName
+            if (maestroLibCode.contains('.')) {
+                maestroLibCode = maestroLibCode.replace('.','-')
+            }
+            if (maestroLibCode.contains(' ')) {
+                maestroLibCode = maestroLibCode.replace(' ','-')
+            }
+            maestroLibCode = maestroLibCode.toLowerCase()
+            maestroProject.setProperty("maestro.library.code", maestroLibCode)
+            println "Generating Source Code for Maestro Library: ${libName}"
+            maestroProject.executeTarget("scaffold-maestro-lib-build-xml")
+            String downloadExistingLib = ant.project.getProperty("download.existing.library")
+            if ('true'==downloadExistingLib) {
+                println 'Download existing Maestro Library into local source code folder'
+                maestroProject = new org.apache.tools.ant.Project()
+                maestroProject.init()
+                org.apache.tools.ant.ProjectHelper.configureProject(maestroProject, new File("build-lib-${maestroLibCode}.xml"))
+                maestroProject.executeTarget("download-lib")
+            }
+        </groovy>
+    </target>
+
+    <!--
+Maestro project generation properties are read from new-maestro-project.properties file
+-->
+    <property file="new-maestro-project.properties"/>
+
+    <target name="create-maestro-project">
+        <!-- Create the maestro project build file and template directory using scaffold -->
+        <groovy>
+            org.apache.tools.ant.Project maestroProject = new org.apache.tools.ant.Project()
+            maestroProject.init()
+            org.apache.tools.ant.ProjectHelper.configureProject(maestroProject, new File("scaffold.xml"))
+            String projectName = ant.project.getProperty("maestro.project.name")
+
+            maestroProject.setProperty("maestro.project.name", projectName)
+            maestroProject.setProperty("maestro.project.description", ant.project.getProperty("maestro.project.description"))
+            maestroProject.setProperty("maestro.release.version", ant.project.getProperty("maestro.release.version"))
+            maestroProject.setProperty("distribute.project", ant.project.getProperty("distribute.project"))
+            // use maestro project name to generate a short project code. ('test.project' -> 'test-project')
+            String maestroProjectCode = projectName
+            if (maestroProjectCode.contains('.')) {
+                maestroProjectCode = maestroProjectCode.replace('.','-')
+            }
+            if (maestroProjectCode.contains(' ')) {
+                maestroProjectCode = maestroProjectCode.replace(' ','-')
+            }
+            maestroProjectCode = maestroProjectCode.toLowerCase()
+            maestroProject.setProperty("maestro.project.code", maestroProjectCode)
+            println "Generating Source Code for Maestro Project: ${projectName}"
+            maestroProject.executeTarget("scaffold-maestro-project-build-xml")
+            String downloadExistingProject = ant.project.getProperty("download.existing.project")
+            if ('true'==downloadExistingProject) {
+                println 'Download existing Maestro Project into local source code folder'
+                maestroProject = new org.apache.tools.ant.Project()
+                maestroProject.init()
+                org.apache.tools.ant.ProjectHelper.configureProject(maestroProject, new File("build-project-${maestroProjectCode}.xml"))
+                maestroProject.executeTarget("download-project")
+            }
+        </groovy>
+    </target>
+
+</project>

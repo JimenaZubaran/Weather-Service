@@ -1,0 +1,38 @@
+{
+  "name": "Welcome Greeting",
+  "description": "TODO...",
+  "type": "Dynamic Data",
+  "version": 1,
+  "tmMinVersion": "5.0.0",
+  "legacyGroovy": false,
+  "parameters": [
+    {
+      "name": "groovyScript",
+      "filePath": "WelcomeGreeting.groovy",
+      "fileIncludes": [],
+      "bind": true,
+      "required": false,
+      "clearOnExport": false,
+      "readOnly": true
+    },
+    {
+      "name": "Unit Test Script",
+      "filePath": "WelcomeGreetingTest.groovy",
+      "fileIncludes": [],
+      "bind": false,
+      "required": false,
+      "clearOnExport": false,
+      "readOnly": true,
+      "unitTest": true
+    },
+    {
+      "name": "Help Doc",
+      "type": "HTML",
+      "filePath": "service-help.html",
+      "bind": false,
+      "required": false,
+      "clearOnExport": false,
+      "readOnly": true
+    }
+  ]
+}

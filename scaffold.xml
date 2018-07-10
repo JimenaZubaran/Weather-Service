@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="scaffold" basedir="." default="scaffold">
+
+    <property file="build.properties"/>
+    <property name="transact.sdk.version" value="5.1.7"/>
+    <property name="scaffold.assets.dir" value="${transact.api.dir}/assets"/>
+
+    <path id="transact-fluent-api">
+        <fileset dir="${transact.api.dir}/lib">
+            <include name="**/*.jar"/>
+        </fileset>
+    </path>
+
+    <taskdef resource="org/codehaus/groovy/antlib.xml">
+        <classpath refid="transact-fluent-api"/>
+    </taskdef>
+
+    <taskdef resource="net/sf/antcontrib/antlib.xml">
+        <classpath refid="transact-fluent-api"/>
+    </taskdef>
+
+<!-- Initialises the project structure -->
+    <target name="scaffold" depends="scaffold-build-xml,scaffold-build-properties,scaffold-proxy-properties,scaffold-package-dir,scaffold-src-dir,scaffold-new-service-properties,scaffold-maestro-properties,scaffold-transact-auth-properties,scaffold-build-number,scaffold-gitignore"/>
+
+    <target name="scaffold-build-xml">
+        <copy file="${scaffold.assets.dir}/build.xml" tofile="./build.xml" overwrite="true"/>
+    </target>
+
+    <target name="scaffold-build-properties">
+        <copy file="${scaffold.assets.dir}/build.properties" tofile="./tmp-build.properties" overwrite="true"/>
+        <property name="project.name" value="Hello World"/>
+        <property name="project.code" value="hello-world"/>
+        <property name="project.version.major" value="1"/>
+        <property name="project.version.minor" value="0"/>
+        <property name="manager.version.min" value="5.0.0"/>
+        <property name="src.dir" value="src"/>
+        <property name="package.dir" value="package"/>
+        <property name="package.help" value="src/package.html"/>
+        <property name="dist.dir" value="dist"/>
+        <propertyfile file="tmp-build.properties" comment="Project level properties">
+            <entry  key="transact.api.dir" value="../transact-fluent-api-${transact.sdk.version}"/>
+            <entry  key="project.name" value="${project.name}"/>
+            <entry  key="project.code" value="${project.code}"/>
+            <entry  key="project.version.major" type="int" value="${project.version.major}"/>
+            <entry  key="project.version.minor" type="int" value="${project.version.minor}"/>
+            <entry  key="manager.version.min" value="${manager.version.min}"/>
+            <entry  key="src.dir" value="${src.dir}"/>
+            <entry  key="package.dir" value="${package.dir}"/>
+            <entry  key="package.help" value="${package.help}"/>
+            <entry  key="dist.dir" value="${dist.dir}"/>
+        </propertyfile>
+        <move file="./tmp-build.properties" tofile="./build.properties" overwrite="true"/>
+    </target>
+	
+    <target name="scaffold-proxy-properties">
+        <copy file="${scaffold.assets.dir}/proxy.properties" tofile="./proxy.properties" overwrite="true"/>
+    </target>
+
+    <target name="scaffold-package-dir">
+        <copy todir="./package" overwrite="false">
+            <fileset dir="${scaffold.assets.dir}/package">
+                <present targetdir="./package" present="srconly"/>
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="scaffold-src-dir">
+        <copy todir="./src" overwrite="false">
+            <fileset dir="${scaffold.assets.dir}/src">
+                <present targetdir="./src" present="srconly"/>
+            </fileset>
+        </copy>
+    </target>
+
+    <target name="scaffold-new-service-properties">
+        <copy file="${scaffold.assets.dir}/new-service.properties" tofile="./new-service.properties" overwrite="true"/>
+    </target>
+	
+    <target name="scaffold-new-application-package-properties">
+        <copy file="${scaffold.assets.dir}/new-application-package.properties" tofile="./new-application-package.properties" overwrite="true"/>
+    </target>
+
+    <target name="scaffold-transact-auth-properties">
+        <copy file="${scaffold.assets.dir}/transact-auth.properties" tofile="./transact-auth.properties" overwrite="true"/>
+    </target>
+
+    <target name="scaffold-build-number">
+        <copy file="${scaffold.assets.dir}/build.number" tofile="./build.number" overwrite="false"/>
+    </target>
+
+    <target name="scaffold-gitignore">
+        <copy file="${scaffold.assets.dir}/gitignore.txt" tofile="./.gitignore" overwrite="true"/>
+    </target>
+
+    <target name="scaffold-svc-build-xml">
+        <copy file="${scaffold.assets.dir}/build-svc.xml" tofile="./build-svc-${service.code}.xml" overwrite="true">
+            <filterchain>
+                <replacetokens>
+                    <token key="SERVICE_CODE" value="${service.code}"/>
+                </replacetokens>
+            </filterchain>
+        </copy>
+    </target>
+	
+    <target name="scaffold-app-build-xml">
+        <copy file="${scaffold.assets.dir}/build-app.xml" tofile="./build-app-${application.package.code}.xml" overwrite="true">
+            <filterchain>
+                <replacetokens>
+					<token key="APP_PACK_CODE" value="${application.package.code}"/>
+                    <token key="APP_PACK_NAME" value="${application.package.name}"/>
+                </replacetokens>
+            </filterchain>
+        </copy>
+    </target>
+
+    <!-- This target regenerates all the ant build files for the existing services -->
+    <target name="regenerate-all-build-xml">
+        <groovy>
+            def scanner = ant.fileScanner {
+                fileset(dir:".") {
+                    include(name:"build-*.xml")
+                }
+            }
+            for(f in scanner){
+                println("Regenerating " + f.name)
+                if(f.name.startsWith("build-svc")){
+                    String serviceCode = f.name.replace("build-svc-","").replace(".xml","")
+                    ant.project.setProperty("service.code", serviceCode)
+                    ant.project.executeTarget("scaffold-svc-build-xml")
+                } else if(f.name.startsWith("build-lib")){
+                    org.apache.tools.ant.Project libBuild = new org.apache.tools.ant.Project()
+                    libBuild.init()
+                    org.apache.tools.ant.ProjectHelper.configureProject(libBuild, f)
+                    ant.project.setProperty("maestro.library.code", libBuild.getProperty("library.code"))
+                    ant.project.setProperty("maestro.library.name", libBuild.getProperty("library.name"))
+                    ant.project.setProperty("maestro.library.project.name", libBuild.getProperty("library.project.name"))
+                    String distLib = libBuild.getProperty("distribute.library")
+                    if(!distLib){ distLib = "true" }
+                    ant.project.setProperty("distribute.library", distLib)
+                    ant.project.executeTarget("scaffold-maestro-lib-build-xml")
+                } else if(f.name.startsWith("build-project")){
+                    org.apache.tools.ant.Project prjBuild = new org.apache.tools.ant.Project()
+                    prjBuild.init()
+                    org.apache.tools.ant.ProjectHelper.configureProject(prjBuild, f)
+                    ant.project.setProperty("maestro.project.code", prjBuild.getProperty("maestro.project.code"))
+                    ant.project.setProperty("maestro.project.name", prjBuild.getProperty("maestro.project.name"))
+                    String distProject = prjBuild.getProperty("distribute.project")
+                    if(!distProject){ distProject = "false" }
+                    ant.project.setProperty("distribute.project", distProject)
+                    ant.project.executeTarget("scaffold-maestro-project-build-xml")
+                }
+            }
+        </groovy>
+    </target>
+
+    <!-- Scafford for maestro library -->
+    <target name="scaffold-maestro-properties">
+        <copy file="${scaffold.assets.dir}/new-maestro-lib.properties" tofile="./new-maestro-lib.properties" overwrite="true"/>
+        <copy file="${scaffold.assets.dir}/new-maestro-project.properties" tofile="./new-maestro-project.properties" overwrite="true"/>
+    </target>
+
+    <target name="scaffold-maestro-lib-build-xml">
+        <copy file="${scaffold.assets.dir}/build-lib.xml" tofile="./build-lib-${maestro.library.code}.xml" overwrite="true">
+            <filterchain>
+                <replacetokens>
+                    <token key="LIBRARY_CODE" value="${maestro.library.code}"/>
+                    <token key="LIBRARY_NAME" value="${maestro.library.name}"/>
+                    <token key="LIBRARY_PROJECT_NAME" value="${maestro.library.project.name}"/>
+                    <token key="DISTRIBUTE_LIBRARY" value="${distribute.library}"/>
+                </replacetokens>
+            </filterchain>
+        </copy>
+        <mkdir dir="./src/maestro/lib/${maestro.library.code}"/>
+        <copy todir="./src/maestro/lib/${maestro.library.code}" overwrite="false">
+            <fileset dir="${scaffold.assets.dir}/maestro/lib">
+                <present targetdir="./src/maestro/lib/${maestro.library.code}" present="srconly"/>
+            </fileset>
+            <filterchain>
+                <replacetokens>
+                    <token key="MAESTRO_LIB_NAME" value="${maestro.library.name}"/>
+                    <token key="MAESTRO_LIB_DESC" value="${maestro.library.description}"/>
+                    <token key="MAESTRO_LIB_TYPE" value="${maestro.library.type}"/>
+                </replacetokens>
+            </filterchain>
+        </copy>
+    </target>
+
+    <target name="scaffold-maestro-project-build-xml">
+        <copy file="${scaffold.assets.dir}/build-project.xml" tofile="./build-project-${maestro.project.code}.xml" overwrite="true">
+            <filterchain>
+                <replacetokens>
+                    <token key="MAESTRO_PROJECT_CODE" value="${maestro.project.code}"/>
+                    <token key="MAESTRO_PROJECT_NAME" value="${maestro.project.name}"/>
+                    <token key="DISTRIBUTE_PROJECT" value="${distribute.project}"/>
+                </replacetokens>
+            </filterchain>
+        </copy>
+        <mkdir dir="./src/maestro/project/${maestro.project.code}"/>
+        <copy todir="./src/maestro/project/${maestro.project.code}" overwrite="false">
+            <fileset dir="${scaffold.assets.dir}/maestro/project">
+                <present targetdir="./src/maestro/project/${maestro.project.code}" present="srconly"/>
+            </fileset>
+            <filterchain>
+                <replacetokens>
+                    <token key="MAESTRO_PROJECT_NAME" value="${maestro.project.name}"/>
+                    <token key="MAESTRO_PROJECT_DESC" value="${maestro.project.description}"/>
+                    <token key="MAESTRO_RELEASE_VERSION" value="${maestro.release.version}"/>
+                </replacetokens>
+            </filterchain>
+        </copy>
+    </target>
+
+</project>

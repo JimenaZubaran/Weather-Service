@@ -1,0 +1,7 @@
+transact-auth.properties
+out/
+tmp/
+backup/
+.idea/workspace.xml
+.idea/tasks.xml
+**/.DS_Store

@@ -1,0 +1,39 @@
+{
+  "name": "Weather",
+  "description": "TODO...",
+  "type": "Groovy Service",
+  "version": 1,
+  "tmMinVersion": "5.0.0",
+  "legacyGroovy": false,
+  "serviceConnection": "weather",
+  "parameters": [
+    {
+      "name": "groovyScript",
+      "filePath": "Weather.groovy",
+      "fileIncludes": [],
+      "bind": true,
+      "required": false,
+      "clearOnExport": false,
+      "readOnly": true
+    },
+    {
+      "name": "Unit Test Script",
+      "filePath": "WeatherTest.groovy",
+      "fileIncludes": [],
+      "bind": false,
+      "required": false,
+      "clearOnExport": false,
+      "readOnly": true,
+      "unitTest": true
+    },
+    {
+      "name": "Help Doc",
+      "type": "HTML",
+      "filePath": "service-help.html",
+      "bind": false,
+      "required": false,
+      "clearOnExport": false,
+      "readOnly": true
+    }
+  ]
+}
