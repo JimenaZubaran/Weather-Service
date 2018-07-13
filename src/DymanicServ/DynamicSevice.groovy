@@ -19,7 +19,8 @@ class DynamicSevice {
         def results = [:]
 
         Map paramss = [
-                "svcDef": svcDef,
+                //"svcDef": svcDef,
+                "txn": txn,
                 "request": request,
                 "user": user,
                 "params": [
@@ -61,7 +62,7 @@ class DynamicSevice {
     }
 
     String invokeWeather(Map params) {
-        return new ServiceInvoker()
+        return new GroovyServiceInvoker()
                 .setServiceName("Weather")
                 .setClientCode("citi")
                 .invoke(params)

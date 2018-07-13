@@ -5,7 +5,6 @@
   "version": 1,
   "tmMinVersion": "5.0.0",
   "legacyGroovy": false,
-  "serviceConnection": "weather",
   "parameters": [
     {
       "name": "groovyScript",

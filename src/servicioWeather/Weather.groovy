@@ -29,9 +29,11 @@ class Weather {
         apiKey ? paramss.put("appid", apiKey) : ""
 */
 
-            //Obtener valores
-            String ciudad = params.get("ciudad")
-            String apiKey = params.get("apiKey")
+            //Obtener valores. Mapear el mapa
+            Map parametros = (Map) params ["params"]
+
+            String ciudad = parametros.get("ciudad")
+            String apiKey = parametros.get("apiKey")
             def paramss = [:]
 
             /*logger.info("WeatherGroovy")
